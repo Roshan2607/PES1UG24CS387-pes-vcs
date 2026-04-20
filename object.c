@@ -94,8 +94,32 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
-    // TODO: Implement
-    (void)type; (void)data; (void)len; (void)id_out;
+    // Step 1: Determine type string from the ObjectType enum
+    const char *type_str;
+    switch (type) {
+        case OBJ_BLOB:   type_str = "blob";   break;
+        case OBJ_TREE:   type_str = "tree";   break;
+        case OBJ_COMMIT: type_str = "commit"; break;
+        default: return -1;
+    }
+
+    // Step 2: Build the header string: "type size\0"
+    char header[64];
+    int header_len = sprintf(header, "%s %zu", type_str, len);
+    header_len++; // include the null terminator as part of the header
+
+    // Step 3: Assemble the full object (header + data) into one buffer
+    size_t full_len = header_len + len;
+    uint8_t *full_object = malloc(full_len);
+    if (!full_object) return -1;
+    memcpy(full_object, header, header_len);
+    memcpy(full_object + header_len, data, len);
+
+    // Step 4: Compute SHA-256 hash of the full object
+    compute_hash(full_object, full_len, id_out);
+
+    // TODO: Deduplication check, shard directory creation, and atomic write
+    free(full_object);
     return -1;
 }
 
