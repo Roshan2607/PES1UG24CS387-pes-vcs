@@ -177,31 +177,38 @@ static int compare_index_entries(const void *a, const void *b) {
 
 int index_save(const Index *index) {
     // We must sort the index entries by path before saving.
-    // Since 'index' is const, we'll create a mutable copy to sort.
-    Index sorted_index = *index;
-    qsort(sorted_index.entries, sorted_index.count, sizeof(IndexEntry), compare_index_entries);
+    // The Index struct is very large (~5.6MB), so we allocate the copy on the heap.
+    Index *sorted_index = malloc(sizeof(Index));
+    if (!sorted_index) return -1;
+    *sorted_index = *index;
+    
+    qsort(sorted_index->entries, sorted_index->count, sizeof(IndexEntry), compare_index_entries);
 
     char tmp_path[512];
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", INDEX_FILE);
 
     FILE *f = fopen(tmp_path, "w");
-    if (!f) return -1;
+    if (!f) {
+        free(sorted_index);
+        return -1;
+    }
 
-    for (int i = 0; i < sorted_index.count; i++) {
+    for (int i = 0; i < sorted_index->count; i++) {
         char hex[HASH_HEX_SIZE + 1];
-        hash_to_hex(&sorted_index.entries[i].hash, hex);
+        hash_to_hex(&sorted_index->entries[i].hash, hex);
 
         fprintf(f, "%o %s %lu %u %s\n",
-                sorted_index.entries[i].mode,
+                sorted_index->entries[i].mode,
                 hex,
-                (unsigned long)sorted_index.entries[i].mtime_sec,
-                sorted_index.entries[i].size,
-                sorted_index.entries[i].path);
+                (unsigned long)sorted_index->entries[i].mtime_sec,
+                sorted_index->entries[i].size,
+                sorted_index->entries[i].path);
     }
 
     fflush(f);
     fsync(fileno(f));
     fclose(f);
+    free(sorted_index);
 
     if (rename(tmp_path, INDEX_FILE) != 0) {
         unlink(tmp_path);
@@ -209,6 +216,8 @@ int index_save(const Index *index) {
     }
     return 0;
 }
+
+
 
 // Stage a file for the next commit.
 //
@@ -231,6 +240,12 @@ int index_add(Index *index, const char *path) {
     if (!S_ISREG(st.st_mode)) {
         fprintf(stderr, "error: '%s' is not a regular file\n", path);
         return -1; 
+    }
+    
+    // Edge case: prevent adding internal repository files
+    if (strncmp(path, ".pes/", 5) == 0) {
+        fprintf(stderr, "error: cannot add files inside .pes/\n");
+        return -1;
     }
     
     // Step 1: Read file contents
