@@ -10,6 +10,7 @@
 //   "100644 hello.txt\0" followed by 32 raw bytes of SHA-256
 
 #include "tree.h"
+#include "index.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -116,22 +117,30 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 
 // ─── TODO: Implement these ──────────────────────────────────────────────────
 
-// Build a tree hierarchy from the current index and write all tree
-// objects to the object store.
-//
-// HINTS - Useful functions and concepts for this phase:
-//   - index_load      : load the staged files into memory
-//   - strchr          : find the first '/' in a path to separate directories from files
-//   - strncmp         : compare prefixes to group files belonging to the same subdirectory
-//   - Recursion       : you will likely want to create a recursive helper function 
-//                       (e.g., `write_tree_level(entries, count, depth)`) to handle nested dirs.
-//   - tree_serialize  : convert your populated Tree struct into a binary buffer
-//   - object_write    : save that binary buffer to the store as OBJ_TREE
-//
+// Forward declaration for object_write (implemented in object.c)
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
+// Recursive helper: build a tree for entries at a given prefix level.
+// entries     - array of index entries (sorted by path)
+// count       - number of entries
+// prefix      - the directory prefix for this level (e.g., "" for root, "src/" for src)
+// prefix_len  - length of the prefix string
+// id_out      - receives the ObjectID of the written tree
 // Returns 0 on success, -1 on error.
-int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
+static int write_tree_recursive(const IndexEntry *entries, int count,
+                                const char *prefix, size_t prefix_len,
+                                ObjectID *id_out) {
+    // TODO: Implement recursive tree building logic
+    (void)entries; (void)count; (void)prefix; (void)prefix_len; (void)id_out;
     return -1;
+}
+
+int tree_from_index(ObjectID *id_out) {
+    // Step 1: Load the current index (staged files)
+    Index index;
+    if (index_load(&index) != 0) return -1;
+    if (index.count == 0) return -1;  // Nothing staged
+
+    // Step 2: Build the tree hierarchy recursively starting from root (empty prefix)
+    return write_tree_recursive(index.entries, index.count, "", 0, id_out);
 }
