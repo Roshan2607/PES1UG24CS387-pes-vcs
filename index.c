@@ -259,6 +259,28 @@ int index_add(Index *index, const char *path) {
     }
     free(data);
 
-    // TODO: Update index entry
-    return -1;
+    // Step 3: Update index entry
+    IndexEntry *entry = index_find(index, path);
+    if (!entry) {
+        if (index->count >= MAX_INDEX_ENTRIES) {
+            fprintf(stderr, "error: index is full\n");
+            return -1;
+        }
+        entry = &index->entries[index->count++];
+        snprintf(entry->path, sizeof(entry->path), "%s", path);
+    }
+    
+    entry->hash = hash;
+    entry->mtime_sec = (uint64_t)st.st_mtime;
+    entry->size = (uint32_t)size;
+    
+    // Set file mode
+    if (st.st_mode & S_IXUSR) {
+        entry->mode = 0100755; // Executable
+    } else {
+        entry->mode = 0100644; // Regular file
+    }
+
+    // Step 4: Save index to disk
+    return index_save(index);
 }
