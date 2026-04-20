@@ -142,8 +142,11 @@ static int write_tree_recursive(const IndexEntry *entries, int count,
         const char *slash = strchr(rest, '/');
 
         if (slash == NULL) {
-            // This is a file at the current tree level
-            // TODO: Add blob entry to tree
+            // This is a file at the current tree level — add as blob entry
+            TreeEntry *te = &tree.entries[tree.count++];
+            te->mode = entries[i].mode;
+            te->hash = entries[i].hash;
+            snprintf(te->name, sizeof(te->name), "%s", rest);
             i++;
         } else {
             // This is a subdirectory entry
