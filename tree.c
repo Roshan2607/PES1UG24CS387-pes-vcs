@@ -149,9 +149,37 @@ static int write_tree_recursive(const IndexEntry *entries, int count,
             snprintf(te->name, sizeof(te->name), "%s", rest);
             i++;
         } else {
-            // This is a subdirectory entry
-            // TODO: Group entries, recurse, add subtree entry
-            i++;
+            // This is a subdirectory — extract directory name
+            size_t dir_len = (size_t)(slash - rest);
+            char dir_name[256];
+            memcpy(dir_name, rest, dir_len);
+            dir_name[dir_len] = '\0';
+
+            // Build the new prefix for recursion (e.g., "src/")
+            char new_prefix[512];
+            snprintf(new_prefix, sizeof(new_prefix), "%s%s/", prefix, dir_name);
+            size_t new_prefix_len = prefix_len + dir_len + 1;
+
+            // Count how many consecutive entries belong to this subdirectory
+            int sub_start = i;
+            while (i < count &&
+                   strncmp(entries[i].path + prefix_len, dir_name, dir_len) == 0 &&
+                   entries[i].path[prefix_len + dir_len] == '/') {
+                i++;
+            }
+
+            // Recursively build the subtree and write it to the object store
+            ObjectID subtree_id;
+            if (write_tree_recursive(entries + sub_start, i - sub_start,
+                                     new_prefix, new_prefix_len, &subtree_id) != 0) {
+                return -1;
+            }
+
+            // Add directory entry pointing to the subtree hash
+            TreeEntry *te = &tree.entries[tree.count++];
+            te->mode = MODE_DIR;
+            te->hash = subtree_id;
+            snprintf(te->name, sizeof(te->name), "%s", dir_name);
         }
     }
 
