@@ -132,9 +132,41 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     snprintf(shard_dir, sizeof(shard_dir), "%s/%.2s", OBJECTS_DIR, hex);
     mkdir(shard_dir, 0755);  // OK if already exists
 
-    // TODO: Atomic write (temp file + fsync + rename)
+    // Step 7: Write to a temporary file in the shard directory
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s/tmp_XXXXXX", shard_dir);
+    int fd = mkstemp(tmp_path);
+    if (fd < 0) { free(full_object); return -1; }
+
+    ssize_t written = write(fd, full_object, full_len);
+    if (written != (ssize_t)full_len) {
+        close(fd);
+        unlink(tmp_path);
+        free(full_object);
+        return -1;
+    }
+
+    // Step 8: fsync the file to ensure data reaches disk before rename
+    fsync(fd);
+    close(fd);
     free(full_object);
-    return -1;
+
+    // Step 9: Rename temp file to final path (atomic on POSIX)
+    char final_path[512];
+    object_path(id_out, final_path, sizeof(final_path));
+    if (rename(tmp_path, final_path) != 0) {
+        unlink(tmp_path);
+        return -1;
+    }
+
+    // Step 10: fsync the shard directory to persist the directory entry
+    int dir_fd = open(shard_dir, O_RDONLY);
+    if (dir_fd >= 0) {
+        fsync(dir_fd);
+        close(dir_fd);
+    }
+
+    return 0;
 }
 
 // Read an object from the store.
