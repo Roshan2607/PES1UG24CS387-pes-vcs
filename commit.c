@@ -202,7 +202,14 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
         return -1;
     }
 
-    // TODO: Link parent, set metadata, serialize, write object, update HEAD
+    // Step 2: Read current HEAD to link as the parent commit
+    if (head_read(&commit.parent) == 0) {
+        commit.has_parent = 1;
+    } else {
+        commit.has_parent = 0; // This is the first commit
+    }
+
+    // TODO: Set metadata, serialize, write object, update HEAD
     (void)message; (void)commit_id_out;
     return -1;
 }
