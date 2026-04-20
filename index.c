@@ -219,9 +219,46 @@ int index_save(const Index *index) {
 //   - index_find                       : checking if the file is already staged
 //
 // Returns 0 on success, -1 on error.
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
 int index_add(Index *index, const char *path) {
-    // TODO: Implement file staging
-    // (See Lab Appendix for logical steps)
-    (void)index; (void)path;
+    struct stat st;
+    if (lstat(path, &st) != 0) {
+        fprintf(stderr, "error: failed to stat '%s'\n", path);
+        return -1;
+    }
+    
+    if (!S_ISREG(st.st_mode)) {
+        fprintf(stderr, "error: '%s' is not a regular file\n", path);
+        return -1; 
+    }
+    
+    // Step 1: Read file contents
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    uint8_t *data = malloc(size > 0 ? (size_t)size : 1);
+    if (!data) { fclose(f); return -1; }
+    
+    if (size > 0 && fread(data, 1, (size_t)size, f) != (size_t)size) {
+        free(data);
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+    
+    // Step 2: Write blob to object store
+    ObjectID hash;
+    if (object_write(OBJ_BLOB, data, (size_t)size, &hash) != 0) {
+        free(data);
+        return -1;
+    }
+    free(data);
+
+    // TODO: Update index entry
     return -1;
 }
