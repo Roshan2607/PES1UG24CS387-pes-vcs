@@ -600,3 +600,73 @@ The following questions cover filesystem concepts beyond the implementation scop
 - **Git Internals** (Pro Git book): https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain
 - **Git from the inside out**: https://codewords.recurse.com/issues/two/git-from-the-inside-out
 - **The Git Parable**: https://tom.preston-werner.com/2009/05/19/the-git-parable.html
+
+---
+---
+
+# LAB REPORT
+
+## Analysis Questions
+
+### Phase 5: Branching and Checkout
+
+**Q5.1: Given this, how would you implement `pes checkout <branch>` — what files need to change in `.pes/`, and what must happen to the working directory? What makes this operation complex?**
+*   **`.pes/` Changes:** We need to update `.pes/HEAD` to point to the new branch using standard `open()`, `write()`, and `close()` system calls. The staging area (`.pes/index`) also needs to be updated to match the new branch's tree.
+*   **Working Directory:** We have to traverse the target commit's tree, much like parsing a directory structure, and update the physical files in our workspace to match.
+*   **Complexity:** The real complexity lies in file protection. If the user has an open file they are actively modifying, doing a blind checkout would overwrite their work. We have to carefully use the `stat()` system call to check file metadata before replacing anything, ensuring we don't accidentally corrupt the user's unsaved workspace.
+
+**Q5.2: Describe how you would detect this "dirty working directory" conflict using only the index and the object store.**
+*   This concept is very similar to how a dirty bit works in page replacement algorithms. 
+*   We can use the `stat()` or `lstat()` system calls on every file in the working directory to retrieve its attributes (like modification time and size). 
+*   By comparing these attributes to the metadata stored in our `.pes/index`, we can tell if the file has been modified since it was last staged. If the file is dirty, and checking out the new branch would overwrite those local modifications, the system must block the checkout operation to prevent data loss.
+
+**Q5.3: "Detached HEAD" means HEAD contains a commit hash directly instead of a branch reference. What happens if you make commits in this state? How could a user recover those commits?**
+*   **What Happens:** The commit is created in the object store, but no branch file is updated to point to it. If you switch away to another branch, it essentially becomes an orphan process. In file system terms, it's like a file inode that has a link count of 0 because no directory entry points to it anymore. It's lost in the void.
+*   **Recovery:** To recover it, the user needs to create a new branch pointing to that orphaned commit's hash. This is basically applying the `link()` system call concept to create a new hard link to the commit, bringing its reference count back up so it's reachable again.
+
+### Phase 6: Garbage Collection and Space Reclamation
+
+**Q6.1: Describe an algorithm to find and delete these objects. What data structure would you use to track "reachable" hashes efficiently? For a repository with 100,000 commits and 50 branches, estimate how many objects you'd need to visit.**
+*   **Algorithm:** We can use a Mark-and-Sweep approach to manage our mass-storage space. First, we start at the branch files and traverse the pointers down through all the commits, trees, and blobs, keeping track of every hash we find in main memory. Then, we use directory-reading system calls to scan `.pes/objects`. If a file isn't in our reachable list, we delete it to free up disk space.
+*   **Data Structure:** A Hash Table in main memory is best for fast lookups. However, if the data structure gets too large for physical memory, the OS will resort to demand paging. If we aren't careful with memory allocation while scanning huge directories, it could lead to thrashing.
+*   **Estimate:** We have to visit all 100,000 commit objects, plus at least 100,000 root trees, and all historically unique blobs. We'd easily be visiting hundreds of thousands of files.
+
+**Q6.2: Why is it dangerous to run garbage collection concurrently with a commit operation? Describe a race condition where GC could delete an object that a concurrent commit is about to reference. How does Git's real GC avoid this?**
+*   **Race Condition:** This creates a classic critical-section problem. Suppose the commit process creates a new blob on disk, but before it can link it to a tree, a context switch happens. The GC thread runs, sees that the new blob has no references, and deletes it. When the commit process resumes, it saves a tree pointing to a deleted file, resulting in a corrupted file system.
+*   **How Git avoids this:** Normally, we'd use mutex locks or semaphores to ensure mutual exclusion while writing objects. However, locking the whole repository would create massive bottlenecks. Instead, real Git avoids this concurrency issue by using a grace period—it simply refuses to garbage collect any files created within the last 14 days, naturally side-stepping the synchronization problem.
+
+---
+
+## Screenshots
+
+### 1A: `./test_objects` output
+> [PLACE YOUR SCREENSHOT 1A HERE]
+
+### 1B: `find .pes/objects` output
+> [PLACE YOUR SCREENSHOT 1B HERE]
+
+### 2A: `./test_tree` output
+> [PLACE YOUR SCREENSHOT 2A HERE]
+
+### 2B: `xxd` of a raw tree object
+> [PLACE YOUR SCREENSHOT 2B HERE]
+
+### 3A: `pes init` → `pes add` → `pes status`
+> [PLACE YOUR SCREENSHOT 3A HERE]
+
+### 3B: `cat .pes/index`
+> [PLACE YOUR SCREENSHOT 3B HERE]
+
+### 4A: `pes log`
+> [PLACE YOUR SCREENSHOT 4A HERE]
+
+### 4B: `find .pes -type f | sort`
+> [PLACE YOUR SCREENSHOT 4B HERE]
+
+### 4C: `cat .pes/refs/heads/main` and `cat .pes/HEAD`
+*(To get this, run: `cat .pes/refs/heads/main` and `cat .pes/HEAD`)*
+> [PLACE YOUR SCREENSHOT 4C HERE]
+
+### Final: Full integration test
+*(To get this, run: `make test-integration`)*
+> [PLACE YOUR SCREENSHOT FINAL HERE]
