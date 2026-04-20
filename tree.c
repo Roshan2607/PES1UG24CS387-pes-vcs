@@ -130,8 +130,30 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 static int write_tree_recursive(const IndexEntry *entries, int count,
                                 const char *prefix, size_t prefix_len,
                                 ObjectID *id_out) {
-    // TODO: Implement recursive tree building logic
-    (void)entries; (void)count; (void)prefix; (void)prefix_len; (void)id_out;
+    Tree tree;
+    tree.count = 0;
+
+    int i = 0;
+    while (i < count) {
+        // Get the portion of the path after the current prefix
+        const char *rest = entries[i].path + prefix_len;
+
+        // Check if there's a '/' — determines file vs subdirectory
+        const char *slash = strchr(rest, '/');
+
+        if (slash == NULL) {
+            // This is a file at the current tree level
+            // TODO: Add blob entry to tree
+            i++;
+        } else {
+            // This is a subdirectory entry
+            // TODO: Group entries, recurse, add subtree entry
+            i++;
+        }
+    }
+
+    // TODO: Serialize tree and write to object store
+    (void)id_out;
     return -1;
 }
 
