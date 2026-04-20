@@ -133,7 +133,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     mkdir(shard_dir, 0755);  // OK if already exists
 
     // Step 7: Write to a temporary file in the shard directory
-    char tmp_path[512];
+    char tmp_path[540];
     snprintf(tmp_path, sizeof(tmp_path), "%s/tmp_XXXXXX", shard_dir);
     int fd = mkstemp(tmp_path);
     if (fd < 0) { free(full_object); return -1; }
@@ -216,7 +216,14 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     }
     fclose(f);
 
-    // TODO: Integrity verification (hash check) will be added next
+    // Step 3: Verify integrity — recompute SHA-256 and compare to expected hash
+    ObjectID computed;
+    compute_hash(file_data, (size_t)file_size, &computed);
+    if (memcmp(computed.hash, id->hash, HASH_SIZE) != 0) {
+        // Hash mismatch means the object is corrupted
+        free(file_data);
+        return -1;
+    }
 
     // Step 3: Parse the header — find the null byte separating header from data
     uint8_t *null_byte = memchr(file_data, '\0', (size_t)file_size);
