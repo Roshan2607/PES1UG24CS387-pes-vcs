@@ -183,9 +183,14 @@ static int write_tree_recursive(const IndexEntry *entries, int count,
         }
     }
 
-    // TODO: Serialize tree and write to object store
-    (void)id_out;
-    return -1;
+    // Serialize the tree struct into binary format and write to object store
+    void *tree_data;
+    size_t tree_len;
+    if (tree_serialize(&tree, &tree_data, &tree_len) != 0) return -1;
+
+    int rc = object_write(OBJ_TREE, tree_data, tree_len, id_out);
+    free(tree_data);
+    return rc;
 }
 
 int tree_from_index(ObjectID *id_out) {
